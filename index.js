@@ -28,13 +28,45 @@ if (!fs.existsSync(uploadsDir)) {
 }
 app.use('/uploads', express.static(uploadsDir));
 
-const pool = new Pool({
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME || process.env.DB_DATABASE, 
-    password: process.env.DB_PASSWORD,
-    port: process.env.DB_PORT,
-    connectionTimeoutMillis: 2000, 
+// ==========================================
+// CONFIGURACIÓN DE BASE DE DATOS PARA RAILWAY
+// ==========================================
+
+// Usar DATABASE_URL si existe (Railway), sino usar variables individuales
+let poolConfig;
+
+if (process.env.DATABASE_URL) {
+    // Railway: usar URL completa con SSL
+    poolConfig = {
+        connectionString: process.env.DATABASE_URL,
+        ssl: {
+            rejectUnauthorized: false
+        }
+    };
+    console.log("✅ Usando DATABASE_URL de Railway");
+} else {
+    // Local: usar variables individuales
+    poolConfig = {
+        user: process.env.DB_USER,
+        host: process.env.DB_HOST,
+        database: process.env.DB_NAME || process.env.DB_DATABASE, 
+        password: process.env.DB_PASSWORD,
+        port: process.env.DB_PORT,
+        connectionTimeoutMillis: 2000,
+    };
+    console.log("✅ Usando configuración local de base de datos");
+}
+
+const pool = new Pool(poolConfig);
+
+// Verificar conexión a la base de datos
+pool.connect((err, client, release) => {
+    if (err) {
+        console.error('❌ Error conectando a la base de datos:', err.message);
+    } else {
+        console.log('✅ Conectado a la base de datos exitosamente');
+        release();
+    }
 });
 
 // ==========================================
