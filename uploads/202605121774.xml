@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante 
+    xmlns:cfdi="http://www.sat.gob.mx/cfd/4" 
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+    xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" 
+    xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/cfd/TimbreFiscalDigital/TimbreFiscalDigitalv11.xsd"
+    Version="4.0" 
+    Folio="202605121774" 
+    Fecha="2026-05-12T12:00:00" 
+    SubTotal="200" 
+    Total="232" 
+    Moneda="MXN" 
+    TipoDeComprobante="I" 
+    Exportacion="01" 
+    MetodoPago="PUE" 
+    LugarExpedicion="97000">
+    <cfdi:Emisor Rfc="SIM123456ABC" Nombre="SOLUCIONES INTEGRALES MULTIMEDIA S.A. de C.V." RegimenFiscal="601"/>
+    <cfdi:Receptor Rfc="BUMDH78967890" Nombre="MATERIALES " RegimenFiscalReceptor="605 - Sueldos y Salarios" UsoCFDI="G03 - Gastos en general" DomicilioFiscalReceptor="98750"/>
+    <cfdi:Conceptos>
+        <cfdi:Concepto ClaveProdServ="82101601" Cantidad="1" ClaveUnidad="E48" Descripcion="Servicios de Publicidad y Spots de Radio" ValorUnitario="200" Importe="200" ObjetoImp="02">
+            <cfdi:Impuestos>
+                <cfdi:Traslados>
+                    <cfdi:Traslado Base="200" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="32"/>
+                </cfdi:Traslados>
+            </cfdi:Impuestos>
+        </cfdi:Concepto>
+    </cfdi:Conceptos>
+    <cfdi:Impuestos TotalImpuestosTrasladados="32">
+        <cfdi:Traslados>
+            <cfdi:Traslado Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="32" Base="200"/>
+        </cfdi:Traslados>
+    </cfdi:Impuestos>
+    <cfdi:Complemento>
+        <tfd:TimbreFiscalDigital 
+            Version="1.1" 
+            UUID="202605121774-GENERADO-SIM" 
+            FechaTimbrado="2026-05-12T12:00:05"
+            RfcProvCertif="SAT970701NN3"
+            SelloCFD="ABC123SelloFicticio"
+            NoCertificadoSAT="00001000000504465028"
+            SelloSAT="XYZ789SelloSATFicticio"/>
+    </cfdi:Complemento>
+</cfdi:Comprobante>

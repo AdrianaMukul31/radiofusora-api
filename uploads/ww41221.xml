@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" Version="4.0" Folio="ww41221" Fecha="2026-04-28" SubTotal="2444" Total="2835.04" Moneda="MXN" TipoDeComprobante="I" Exportacion="01" MetodoPago="PUE" LugarExpedicion="97000">
+    <cfdi:Emisor Rfc="SIM123456ABC" Nombre="SOLUCIONES INTEGRALES MULTIMEDIA S.A. de C.V." RegimenFiscal="601"/>
+    <cfdi:Receptor Rfc="BUMDH78967890" Nombre="MATERIALES " RegimenFiscalReceptor="605 - Sueldos y Salarios" UsoCFDI="G03 - Gastos en general" DomicilioFiscalReceptor="98750"/>
+    <cfdi:Conceptos>
+        <cfdi:Concepto ClaveProdServ="82101601" Cantidad="1" ClaveUnidad="E48" Descripcion="Servicios de Publicidad y Spots de Radio" ValorUnitario="2444" Importe="2444" ObjetoImp="02">
+            <cfdi:Impuestos>
+                <cfdi:Traslados>
+                    <cfdi:Traslado Base="2444" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="391.04"/>
+                </cfdi:Traslados>
+            </cfdi:Impuestos>
+        </cfdi:Concepto>
+    </cfdi:Conceptos>
+    <cfdi:Impuestos TotalImpuestosTrasladados="391.04">
+        <cfdi:Traslados>
+            <cfdi:Traslado Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="391.04" Base="2444"/>
+        </cfdi:Traslados>
+    </cfdi:Impuestos>
+    <cfdi:Complemento>
+        <tfd:TimbreFiscalDigital Version="1.1" UUID="ww41221-GENERADO-SIM"/>
+    </cfdi:Complemento>
+</cfdi:Comprobante>
