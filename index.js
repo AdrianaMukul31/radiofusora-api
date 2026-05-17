@@ -32,11 +32,9 @@ app.use('/uploads', express.static(uploadsDir));
 // CONFIGURACIÓN DE BASE DE DATOS PARA RAILWAY
 // ==========================================
 
-// Usar DATABASE_URL si existe (Railway), sino usar variables individuales
 let poolConfig;
 
 if (process.env.DATABASE_URL) {
-    // Railway: usar URL completa con SSL
     poolConfig = {
         connectionString: process.env.DATABASE_URL,
         ssl: {
@@ -45,7 +43,6 @@ if (process.env.DATABASE_URL) {
     };
     console.log("✅ Usando DATABASE_URL de Railway");
 } else {
-    // Local: usar variables individuales
     poolConfig = {
         user: process.env.DB_USER,
         host: process.env.DB_HOST,
@@ -296,7 +293,7 @@ const crearArchivoPDF = (datos, rutaDestino) => {
 async function actualizarSpotsTransmitidos() {
     try {
         const result = await pool.query(`
-            UPDATE "programación" 
+            UPDATE programacion 
             SET estado = 'Transmitido' 
             WHERE fecha_transmision < NOW() 
             AND estado = 'Programado'
@@ -364,8 +361,8 @@ async function contarSpotsProgramados(idContrato) {
     try {
         const result = await pool.query(`
             SELECT COUNT(*) as total
-            FROM "programación" p
-            JOIN "anuncios" a ON p.id_anuncio = a.id_anuncio
+            FROM programacion p
+            JOIN anuncios a ON p.id_anuncio = a.id_anuncio
             WHERE a.id_contrato = $1
             AND p.estado = 'Programado'
         `, [idContrato]);
@@ -383,8 +380,8 @@ async function contarSpotsTransmitidos(idContrato) {
     try {
         const result = await pool.query(`
             SELECT COUNT(*) as total
-            FROM "programación" p
-            JOIN "anuncios" a ON p.id_anuncio = a.id_anuncio
+            FROM programacion p
+            JOIN anuncios a ON p.id_anuncio = a.id_anuncio
             WHERE a.id_contrato = $1
             AND p.estado = 'Transmitido'
         `, [idContrato]);
@@ -428,7 +425,7 @@ async function calcularEstadoContrato(estadoActual, spotsTotales, fechaInicio, f
 async function sincronizarEstadosAnuncios(idContrato, nuevoEstadoContrato) {
     try {
         const result = await pool.query(
-            'UPDATE "anuncios" SET estado = $1 WHERE id_contrato = $2 RETURNING id_anuncio',
+            'UPDATE anuncios SET estado = $1 WHERE id_contrato = $2 RETURNING id_anuncio',
             [nuevoEstadoContrato, idContrato]
         );
         console.log(`   📢 Sincronizados ${result.rowCount} anuncios a estado "${nuevoEstadoContrato}"`);
@@ -561,18 +558,18 @@ app.post('/api/clientes-integral', verifyRole([1, 2]), async (req, res) => {
         } = req.body;
 
         const resCli = await client.query(
-            'INSERT INTO "clientes" (razon_social, rfc_cliente, telefono_cliente, correo_cliente) VALUES ($1, $2, $3, $4) RETURNING id_cliente',
+            'INSERT INTO clientes (razon_social, rfc_cliente, telefono_cliente, correo_cliente) VALUES ($1, $2, $3, $4) RETURNING id_cliente',
             [razon_social, rfc_cliente, telefono_cliente, correo_cliente]
         );
         const idNuevoCliente = resCli.rows[0].id_cliente;
 
         await client.query(
-            'INSERT INTO "direcciones_cliente" (id_cliente, calle, no_exterior, no_interior, ciudad, estado, codigo_postal) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+            'INSERT INTO direcciones_cliente (id_cliente, calle, no_exterior, no_interior, ciudad, estado, codigo_postal) VALUES ($1, $2, $3, $4, $5, $6, $7)',
             [idNuevoCliente, calle, no_exterior, no_interior, ciudad, estado, codigo_postal]
         );
 
         await client.query(
-            'INSERT INTO "datos_fiscales" (id_cliente, regimen_fiscal, uso_cfdi, fecha_vigencia) VALUES ($1, $2, $3, $4)',
+            'INSERT INTO datos_fiscales (id_cliente, regimen_fiscal, uso_cfdi, fecha_vigencia) VALUES ($1, $2, $3, $4)',
             [idNuevoCliente, regimen_fiscal, uso_cfdi, fecha_vigencia]
         );
 
@@ -591,9 +588,9 @@ app.get('/api/clientes', verifyRole([1, 2]), async (req, res) => {
         const query = `
             SELECT c.*, d.calle, d.no_exterior, d.no_interior, d.ciudad, d.estado, d.codigo_postal,
                     f.regimen_fiscal, f.uso_cfdi, f.fecha_vigencia
-            FROM "clientes" c
-            LEFT JOIN "direcciones_cliente" d ON c.id_cliente = d.id_cliente
-            LEFT JOIN "datos_fiscales" f ON c.id_cliente = f.id_cliente
+            FROM clientes c
+            LEFT JOIN direcciones_cliente d ON c.id_cliente = d.id_cliente
+            LEFT JOIN datos_fiscales f ON c.id_cliente = f.id_cliente
             ORDER BY c.id_cliente DESC`;
         const result = await pool.query(query);
         res.json(result.rows);
@@ -608,9 +605,9 @@ app.get('/api/clientes/rfc/:rfc', verifyRole([1, 2]), async (req, res) => {
         const query = `
             SELECT c.*, d.calle, d.no_exterior, d.no_interior, d.ciudad, d.estado, d.codigo_postal,
                     f.regimen_fiscal, f.uso_cfdi, f.fecha_vigencia
-            FROM "clientes" c
-            LEFT JOIN "direcciones_cliente" d ON c.id_cliente = d.id_cliente
-            LEFT JOIN "datos_fiscales" f ON c.id_cliente = f.id_cliente
+            FROM clientes c
+            LEFT JOIN direcciones_cliente d ON c.id_cliente = d.id_cliente
+            LEFT JOIN datos_fiscales f ON c.id_cliente = f.id_cliente
             WHERE UPPER(TRIM(c.rfc_cliente)) = UPPER(TRIM($1)) 
             LIMIT 1`;
         const result = await pool.query(query, [rfc]);
@@ -633,32 +630,32 @@ app.put('/api/clientes/:id', verifyRole([1]), async (req, res) => {
         } = req.body;
 
         await client.query(
-            'UPDATE "clientes" SET razon_social=$1, rfc_cliente=$2, telefono_cliente=$3, correo_cliente=$4 WHERE id_cliente=$5',
+            'UPDATE clientes SET razon_social=$1, rfc_cliente=$2, telefono_cliente=$3, correo_cliente=$4 WHERE id_cliente=$5',
             [razon_social, rfc_cliente, telefono_cliente, correo_cliente, id]
         );
 
-        const checkDir = await client.query('SELECT id_direccion FROM "direcciones_cliente" WHERE id_cliente = $1', [id]);
+        const checkDir = await client.query('SELECT id_direccion FROM direcciones_cliente WHERE id_cliente = $1', [id]);
         if (checkDir.rows.length > 0) {
             await client.query(
-                'UPDATE "direcciones_cliente" SET calle=$1, no_exterior=$2, no_interior=$3, ciudad=$4, estado=$5, codigo_postal=$6 WHERE id_cliente=$7',
+                'UPDATE direcciones_cliente SET calle=$1, no_exterior=$2, no_interior=$3, ciudad=$4, estado=$5, codigo_postal=$6 WHERE id_cliente=$7',
                 [calle, no_exterior, no_interior, ciudad, estado, codigo_postal, id]
             );
         } else {
             await client.query(
-                'INSERT INTO "direcciones_cliente" (id_cliente, calle, no_exterior, no_interior, ciudad, estado, codigo_postal) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+                'INSERT INTO direcciones_cliente (id_cliente, calle, no_exterior, no_interior, ciudad, estado, codigo_postal) VALUES ($1, $2, $3, $4, $5, $6, $7)',
                 [id, calle, no_exterior, no_interior, ciudad, estado, codigo_postal]
             );
         }
 
-        const checkFiscal = await client.query('SELECT id_dato_fiscal FROM "datos_fiscales" WHERE id_cliente = $1', [id]);
+        const checkFiscal = await client.query('SELECT id_dato_fiscal FROM datos_fiscales WHERE id_cliente = $1', [id]);
         if (checkFiscal.rows.length > 0) {
             await client.query(
-                'UPDATE "datos_fiscales" SET regimen_fiscal=$1, uso_cfdi=$2, fecha_vigencia=$3 WHERE id_cliente=$4',
+                'UPDATE datos_fiscales SET regimen_fiscal=$1, uso_cfdi=$2, fecha_vigencia=$3 WHERE id_cliente=$4',
                 [regimen_fiscal, uso_cfdi, fecha_vigencia, id]
             );
         } else {
             await client.query(
-                'INSERT INTO "datos_fiscales" (id_cliente, regimen_fiscal, uso_cfdi, fecha_vigencia) VALUES ($1, $2, $3, $4)',
+                'INSERT INTO datos_fiscales (id_cliente, regimen_fiscal, uso_cfdi, fecha_vigencia) VALUES ($1, $2, $3, $4)',
                 [id, regimen_fiscal, uso_cfdi, fecha_vigencia]
             );
         }
@@ -678,9 +675,9 @@ app.delete('/api/clientes/:id', verifyRole([1]), async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        await client.query('DELETE FROM "direcciones_cliente" WHERE id_cliente = $1', [id]);
-        await client.query('DELETE FROM "datos_fiscales" WHERE id_cliente = $1', [id]);
-        await client.query('DELETE FROM "clientes" WHERE id_cliente = $1', [id]);
+        await client.query('DELETE FROM direcciones_cliente WHERE id_cliente = $1', [id]);
+        await client.query('DELETE FROM datos_fiscales WHERE id_cliente = $1', [id]);
+        await client.query('DELETE FROM clientes WHERE id_cliente = $1', [id]);
         await client.query('COMMIT');
         res.json({ message: "Cliente eliminado exitosamente" });
     } catch (err) {
@@ -708,7 +705,7 @@ app.post('/api/contratos-integral', verifyRole([1, 2]), async (req, res) => {
         const estadoInicial = 'No Iniciado';
         
         const resContrato = await client.query(
-            `INSERT INTO "contrato" (
+            `INSERT INTO contrato (
                 id_cliente, fecha_inicio, fecha_fin, monto_total, estado, 
                 num_spots_contratados, costo_unitario, fecha_registro,
                 tipo_programacion, spots_por_semana, dias_programacion, horario_programacion
@@ -729,7 +726,7 @@ app.post('/api/contratos-integral', verifyRole([1, 2]), async (req, res) => {
             for (let t of terminos) {
                 if (t.clave && t.valor) {
                     await client.query(
-                        'INSERT INTO "termino_contrato" (id_contrato, clave_termino, valor_termino) VALUES ($1, $2, $3)', 
+                        'INSERT INTO termino_contrato (id_contrato, clave_termino, valor_termino) VALUES ($1, $2, $3)', 
                         [idNuevoContrato, t.clave, t.valor]
                     );
                 }
@@ -751,13 +748,13 @@ app.get('/api/contratos', verifyRole([1, 2]), async (req, res) => {
         const query = `
             SELECT con.*, cli.razon_social, cli.rfc_cliente as rfc,
                    COALESCE(
-                       (SELECT COUNT(*) FROM "programación" p 
-                        JOIN "anuncios" a ON p.id_anuncio = a.id_anuncio
+                       (SELECT COUNT(*) FROM programacion p 
+                        JOIN anuncios a ON p.id_anuncio = a.id_anuncio
                         WHERE a.id_contrato = con.id_contrato 
                         AND p.estado IN ('Programado', 'Transmitido')), 0
                    ) as spots_usados
-            FROM "contrato" con 
-            JOIN "clientes" cli ON con.id_cliente = cli.id_cliente 
+            FROM contrato con 
+            JOIN clientes cli ON con.id_cliente = cli.id_cliente 
             ORDER BY con.id_contrato DESC`;
         const result = await pool.query(query);
         
@@ -787,7 +784,7 @@ app.get('/api/contratos', verifyRole([1, 2]), async (req, res) => {
             
             if (estadoCalculado !== contrato.estado) {
                 console.log(`   ✅ Actualizando en BD: ${contrato.estado} → ${estadoCalculado}`);
-                await pool.query('UPDATE "contrato" SET estado = $1 WHERE id_contrato = $2', 
+                await pool.query('UPDATE contrato SET estado = $1 WHERE id_contrato = $2', 
                     [estadoCalculado, contrato.id_contrato]);
                 
                 if (estadoCalculado === 'Cancelado' || estadoCalculado === 'Terminado') {
@@ -814,7 +811,7 @@ app.put('/api/contratos/:id/suspender', verifyRole([1]), async (req, res) => {
         const nuevoEstado = suspendido ? 'Suspendido' : 'Activo';
         
         const result = await pool.query(
-            'UPDATE "contrato" SET estado = $1 WHERE id_contrato = $2 RETURNING *',
+            'UPDATE contrato SET estado = $1 WHERE id_contrato = $2 RETURNING *',
             [nuevoEstado, id]
         );
         
@@ -872,7 +869,7 @@ app.put('/api/contratos/:id/cancelar', verifyRole([1]), async (req, res) => {
         );
         
         await client.query(`
-            UPDATE programación 
+            UPDATE programacion 
             SET estado = 'Cancelado' 
             WHERE id_anuncio IN (SELECT id_anuncio FROM anuncios WHERE id_contrato = $1)
             AND estado IN ('Programado', 'Activo')
@@ -926,7 +923,7 @@ app.delete('/api/contratos/:id', verifyRole([1]), async (req, res) => {
         }
         
         await client.query(`
-            DELETE FROM programación 
+            DELETE FROM programacion 
             WHERE id_anuncio IN (SELECT id_anuncio FROM anuncios WHERE id_contrato = $1)
         `, [id]);
         
@@ -957,8 +954,8 @@ app.get('/api/contratos/buscar-por-rfc/:rfc', verifyRole([1, 2]), async (req, re
         const { rfc } = req.params;
         const query = `
             SELECT con.id_contrato, cli.id_cliente, cli.razon_social, con.fecha_inicio, con.fecha_fin, con.estado
-            FROM "contrato" con
-            JOIN "clientes" cli ON con.id_cliente = cli.id_cliente
+            FROM contrato con
+            JOIN clientes cli ON con.id_cliente = cli.id_cliente
             WHERE UPPER(TRIM(cli.rfc_cliente)) = UPPER(TRIM($1))
             AND con.estado IN ('No Iniciado', 'Activo')
             ORDER BY con.id_contrato DESC
@@ -979,13 +976,13 @@ app.put('/api/contratos/:id', verifyRole([1]), async (req, res) => {
         const { id_cliente, fecha_inicio, fecha_fin, monto_total, estado, num_spots_contratados, costo_unitario, terminos } = req.body;
 
         const contratoActual = await client.query(
-            'SELECT estado FROM "contrato" WHERE id_contrato = $1',
+            'SELECT estado FROM contrato WHERE id_contrato = $1',
             [id]
         );
         const estadoAnterior = contratoActual.rows[0]?.estado;
 
         await client.query(
-            `UPDATE "contrato" SET id_cliente=$1, fecha_inicio=$2, fecha_fin=$3, monto_total=$4, estado=$5, num_spots_contratados=$6, costo_unitario=$7 
+            `UPDATE contrato SET id_cliente=$1, fecha_inicio=$2, fecha_fin=$3, monto_total=$4, estado=$5, num_spots_contratados=$6, costo_unitario=$7 
              WHERE id_contrato=$8`,
             [id_cliente, fecha_inicio, fecha_fin, monto_total, estado, num_spots_contratados, costo_unitario, id]
         );
@@ -994,13 +991,13 @@ app.put('/api/contratos/:id', verifyRole([1]), async (req, res) => {
             await sincronizarEstadosAnuncios(id, estado);
         }
 
-        await client.query('DELETE FROM "termino_contrato" WHERE id_contrato = $1', [id]);
+        await client.query('DELETE FROM termino_contrato WHERE id_contrato = $1', [id]);
 
         if (terminos && Array.isArray(terminos)) {
             for (let t of terminos) {
                 if (t.clave && t.valor) {
                     await client.query(
-                        'INSERT INTO "termino_contrato" (id_contrato, clave_termino, valor_termino) VALUES ($1, $2, $3)', 
+                        'INSERT INTO termino_contrato (id_contrato, clave_termino, valor_termino) VALUES ($1, $2, $3)', 
                         [id, t.clave, t.valor]
                     );
                 }
@@ -1024,7 +1021,7 @@ app.put('/api/contratos/:id', verifyRole([1]), async (req, res) => {
 app.post('/api/anuncios', verifyRole([1, 2]), async (req, res) => {
     try {
         const { nombre_anuncio, duracion_anuncio, id_contrato, activo } = req.body;
-        const query = `INSERT INTO "anuncios" (nombre_anuncio, duracion_anuncio, activo, id_contrato) VALUES ($1, $2, $3, $4) RETURNING *`;
+        const query = `INSERT INTO anuncios (nombre_anuncio, duracion_anuncio, activo, id_contrato) VALUES ($1, $2, $3, $4) RETURNING *`;
         const result = await pool.query(query, [nombre_anuncio, duracion_anuncio, activo ?? true, id_contrato]);
         res.status(201).json(result.rows[0]);
     } catch (err) {
@@ -1037,15 +1034,15 @@ app.get('/api/anuncios', verifyRole([1, 2]), async (req, res) => {
         const query = `
             SELECT a.*, cli.razon_social AS cliente_nombre, c.tipo_programacion, c.num_spots_contratados, c.estado as estado_contrato,
                    COALESCE(
-                       (SELECT COUNT(*) FROM "programación" p 
+                       (SELECT COUNT(*) FROM programacion p 
                         WHERE p.id_anuncio = a.id_anuncio 
                         AND p.estado IN ('Programado', 'Transmitido')), 0
                    ) as spots_usados,
                    CASE WHEN p.id_anuncio IS NOT NULL THEN true ELSE false END AS esta_programado
-            FROM "anuncios" a
-            LEFT JOIN "contrato" c ON a.id_contrato = c.id_contrato
-            LEFT JOIN "clientes" cli ON c.id_cliente = cli.id_cliente
-            LEFT JOIN (SELECT DISTINCT id_anuncio FROM "programación") p ON a.id_anuncio = p.id_anuncio
+            FROM anuncios a
+            LEFT JOIN contrato c ON a.id_contrato = c.id_contrato
+            LEFT JOIN clientes cli ON c.id_cliente = cli.id_cliente
+            LEFT JOIN (SELECT DISTINCT id_anuncio FROM programacion) p ON a.id_anuncio = p.id_anuncio
             ORDER BY a.id_anuncio DESC`;
         const result = await pool.query(query);
         res.json(result.rows);
@@ -1058,8 +1055,8 @@ app.get('/api/programacion', verifyRole([1, 2]), async (req, res) => {
     try {
         const query = `
             SELECT p.*, a.nombre_anuncio, a.id_contrato
-            FROM "programación" p 
-            JOIN "anuncios" a ON p.id_anuncio = a.id_anuncio
+            FROM programacion p 
+            JOIN anuncios a ON p.id_anuncio = a.id_anuncio
             ORDER BY p.fecha_transmision DESC, p.horario ASC`;
         const result = await pool.query(query);
         res.json(result.rows);
@@ -1079,11 +1076,11 @@ app.post('/api/programacion/generar-automatica', verifyRole([1, 2]), async (req,
             SELECT tipo_programacion, spots_por_semana, dias_programacion, horario_programacion,
                    num_spots_contratados, fecha_inicio, fecha_fin, estado,
                    COALESCE(
-                       (SELECT COUNT(*) FROM "programación" p 
+                       (SELECT COUNT(*) FROM programacion p 
                         WHERE p.id_anuncio = $1 
                         AND p.estado IN ('Programado', 'Transmitido')), 0
                    ) as spots_usados
-            FROM "contrato" c
+            FROM contrato c
             WHERE c.id_contrato = $2
         `, [id_anuncio, id_contrato]);
         
@@ -1129,7 +1126,7 @@ app.post('/api/programacion/generar-automatica', verifyRole([1, 2]), async (req,
         
         for (const spot of spotsGenerados) {
             await client.query(
-                `INSERT INTO "programación" (id_anuncio, fecha_transmision, horario, estado) 
+                `INSERT INTO programacion (id_anuncio, fecha_transmision, horario, estado) 
                  VALUES ($1, $2, $3, $4)`,
                 [spot.id_anuncio, spot.fecha_transmision, spot.horario, spot.estado]
             );
@@ -1137,7 +1134,7 @@ app.post('/api/programacion/generar-automatica', verifyRole([1, 2]), async (req,
         
         if (contrato.estado === 'No Iniciado') {
             await client.query(
-                'UPDATE "contrato" SET estado = $1 WHERE id_contrato = $2',
+                'UPDATE contrato SET estado = $1 WHERE id_contrato = $2',
                 ['Activo', id_contrato]
             );
             await sincronizarEstadosAnuncios(id_contrato, 'Activo');
@@ -1177,12 +1174,12 @@ app.post('/api/programacion', verifyRole([1, 2]), async (req, res) => {
                 c.fecha_fin,
                 c.tipo_programacion,
                 COALESCE(
-                    (SELECT COUNT(*) FROM "programación" p 
+                    (SELECT COUNT(*) FROM programacion p 
                      WHERE p.id_anuncio = a.id_anuncio 
                      AND p.estado IN ('Programado', 'Transmitido')), 0
                 ) as spots_usados
-            FROM "anuncios" a
-            INNER JOIN "contrato" c ON a.id_contrato = c.id_contrato
+            FROM anuncios a
+            INNER JOIN contrato c ON a.id_contrato = c.id_contrato
             WHERE a.id_anuncio = $1
         `, [id_anuncio]);
         
@@ -1239,7 +1236,7 @@ app.post('/api/programacion', verifyRole([1, 2]), async (req, res) => {
         }
         
         const existeDuplicado = await client.query(`
-            SELECT id_programacion FROM "programación" 
+            SELECT id_programacion FROM programacion 
             WHERE id_anuncio = $1 AND fecha_transmision = $2 AND horario = $3
         `, [id_anuncio, fecha_transmision, horario]);
         
@@ -1249,14 +1246,14 @@ app.post('/api/programacion', verifyRole([1, 2]), async (req, res) => {
         }
         
         const result = await client.query(
-            `INSERT INTO "programación" (id_anuncio, fecha_transmision, horario, estado) 
+            `INSERT INTO programacion (id_anuncio, fecha_transmision, horario, estado) 
              VALUES ($1, $2, $3, $4) RETURNING *`,
             [id_anuncio, fecha_transmision, horario, estado || 'Programado']
         );
         
         if (contrato.estado_contrato === 'No Iniciado') {
             await client.query(
-                'UPDATE "contrato" SET estado = $1 WHERE id_contrato = $2',
+                'UPDATE contrato SET estado = $1 WHERE id_contrato = $2',
                 ['Activo', contrato.id_contrato]
             );
             await sincronizarEstadosAnuncios(contrato.id_contrato, 'Activo');
@@ -1329,7 +1326,7 @@ app.post('/api/facturas/calcular', verifyRole([1, 2]), async (req, res) => {
         else if (modalidad === 'PERIODO') {
             const result = await pool.query(`
                 SELECT COUNT(*) as total
-                FROM programación p
+                FROM programacion p
                 JOIN anuncios a ON p.id_anuncio = a.id_anuncio
                 WHERE a.id_contrato = $1
                 AND p.fecha_transmision BETWEEN $2 AND $3
@@ -1343,7 +1340,7 @@ app.post('/api/facturas/calcular', verifyRole([1, 2]), async (req, res) => {
         else if (modalidad === 'FINAL') {
             const result = await pool.query(`
                 SELECT COUNT(*) as total
-                FROM programación p
+                FROM programacion p
                 JOIN anuncios a ON p.id_anuncio = a.id_anuncio
                 WHERE a.id_contrato = $1
             `, [id_contrato]);
@@ -1388,9 +1385,9 @@ app.post('/api/facturas-integral', verifyRole([1]), async (req, res) => {
             SELECT c.razon_social, c.rfc_cliente, 
                     d.calle, d.no_exterior, d.ciudad, d.estado, d.codigo_postal,
                     f.regimen_fiscal, f.uso_cfdi
-            FROM "clientes" c
-            LEFT JOIN "direcciones_cliente" d ON c.id_cliente = d.id_cliente
-            LEFT JOIN "datos_fiscales" f ON c.id_cliente = f.id_cliente
+            FROM clientes c
+            LEFT JOIN direcciones_cliente d ON c.id_cliente = d.id_cliente
+            LEFT JOIN datos_fiscales f ON c.id_cliente = f.id_cliente
             WHERE c.id_cliente = $1`;
         
         const resClienteBD = await client.query(queryCliente, [id_cliente]);
@@ -1406,7 +1403,7 @@ app.post('/api/facturas-integral', verifyRole([1]), async (req, res) => {
         };
 
         const resFactura = await client.query(
-            `INSERT INTO "facturas" (id_cliente, folio_cfdi, fecha_emision, subtotal, iva, total, estado) 
+            `INSERT INTO facturas (id_cliente, folio_cfdi, fecha_emision, subtotal, iva, total, estado) 
              VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id_factura`,
             [id_cliente, folio_cfdi, fecha_emision, subtotal, iva, total, estado || 'emitida']
         );
@@ -1421,7 +1418,7 @@ app.post('/api/facturas-integral', verifyRole([1]), async (req, res) => {
         crearArchivoXML(datosGeneracion, rutaXML);
 
         const queryDocs = `
-            INSERT INTO "documentos_fiscales" (id_factura, tipo_documento, url_documento, hash_sha256)
+            INSERT INTO documentos_fiscales (id_factura, tipo_documento, url_documento, hash_sha256)
             VALUES ($1, 'pdf', $2, 'GENERADO'), ($1, 'xml', $3, 'GENERADO')`;
         
         await client.query(queryDocs, [idNuevaFactura, `/uploads/${nombrePDF}`, `/uploads/${nombreXML}`]);
@@ -1430,7 +1427,7 @@ app.post('/api/facturas-integral', verifyRole([1]), async (req, res) => {
             for (let d of detalles) {
                 const idContratoLimpio = d.id_contrato && d.id_contrato !== "" ? d.id_contrato : null;
                 await client.query(
-                    `INSERT INTO "facturas_detalle" (id_factura, id_contrato, periodo_inicio, periodo_fin, monto_facturado) 
+                    `INSERT INTO facturas_detalle (id_factura, id_contrato, periodo_inicio, periodo_fin, monto_facturado) 
                      VALUES ($1, $2, $3, $4, $5)`,
                     [idNuevaFactura, idContratoLimpio, d.periodo_inicio, d.periodo_fin, d.monto_facturado]
                 );
@@ -1452,8 +1449,8 @@ app.get('/api/facturas', verifyRole([1]), async (req, res) => {
     try {
         const query = `
             SELECT f.*, c.razon_social 
-            FROM "facturas" f
-            JOIN "clientes" c ON f.id_cliente = c.id_cliente
+            FROM facturas f
+            JOIN clientes c ON f.id_cliente = c.id_cliente
             ORDER BY f.id_factura DESC`;
         const result = await pool.query(query);
         res.json(result.rows);
@@ -1469,11 +1466,11 @@ app.post('/api/pagos', verifyRole([1]), async (req, res) => {
         const { id_factura, fecha_pago, monto_pagado, metodo_pago, referencia_pago } = req.body;
         
         const queryPago = `
-            INSERT INTO "pagos" (id_factura, fecha_pago, monto_pagado, metodo_pago, referencia_pago) 
+            INSERT INTO pagos (id_factura, fecha_pago, monto_pagado, metodo_pago, referencia_pago) 
             VALUES ($1, $2, $3, $4, $5) RETURNING *`;
         const resultPago = await client.query(queryPago, [id_factura, fecha_pago, monto_pagado, metodo_pago, referencia_pago]);
         
-        await client.query('UPDATE "facturas" SET estado = $1 WHERE id_factura = $2', ['pagada', id_factura]);
+        await client.query('UPDATE facturas SET estado = $1 WHERE id_factura = $2', ['pagada', id_factura]);
 
         await client.query('COMMIT');
         res.status(201).json({ success: true, pago: resultPago.rows[0] });
@@ -1492,7 +1489,7 @@ app.get('/api/facturas/:id/:extension', verifyRole([1, 2]), async (req, res) => 
         
         const query = `
             SELECT url_documento 
-            FROM "documentos_fiscales" 
+            FROM documentos_fiscales 
             WHERE id_factura = $1 AND tipo_documento = $2 
             LIMIT 1`;
             
