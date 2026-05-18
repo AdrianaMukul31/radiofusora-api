@@ -67,6 +67,54 @@ pool.connect((err, client, release) => {
 });
 
 // ==========================================
+// --- VALIDACIONES DE FACTURACIÓN ---
+// ==========================================
+
+async function validarFactura(p_id_contrato, p_modalidad, p_fecha_inicio, p_fecha_fin) {
+    // 1. Validar CONTRATO COMPLETO
+    const contrato = await pool.query(
+        'SELECT facturado_completo, facturado_final FROM contrato WHERE id_contrato = $1',
+        [p_id_contrato]
+    );
+    
+    if (p_modalidad === 'COMPLETO' && contrato.rows[0]?.facturado_completo === true) {
+        return { valido: false, error: "Este contrato ya fue facturado por COMPLETO. No se puede volver a facturar." };
+    }
+    
+    if (p_modalidad === 'FINAL' && contrato.rows[0]?.facturado_final === true) {
+        return { valido: false, error: "Este contrato ya fue facturado al FINAL. No se puede volver a facturar." };
+    }
+    
+    // 2. Validar PERIODO (mes/semana) - evitar facturar el mismo período dos veces
+    if ((p_modalidad === 'PERIODO' || p_modalidad === 'SEMANAL') && p_fecha_inicio && p_fecha_fin) {
+        const existe = await pool.query(
+            `SELECT id FROM facturas_periodos 
+             WHERE id_contrato = $1 AND periodo_inicio = $2 AND periodo_fin = $3`,
+            [p_id_contrato, p_fecha_inicio, p_fecha_fin]
+        );
+        if (existe.rows.length > 0) {
+            return { valido: false, error: "Este período ya fue facturado anteriormente." };
+        }
+    }
+    
+    return { valido: true };
+}
+
+async function registrarPeriodoFacturado(p_id_factura, p_id_contrato, p_fecha_inicio, p_fecha_fin, p_modalidad, p_spots) {
+    await pool.query(
+        `INSERT INTO facturas_periodos (id_contrato, id_factura, periodo_inicio, periodo_fin, modalidad, spots_facturados)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [p_id_contrato, p_id_factura, p_fecha_inicio, p_fecha_fin, p_modalidad, p_spots]
+    );
+    
+    if (p_modalidad === 'COMPLETO') {
+        await pool.query('UPDATE contrato SET facturado_completo = true WHERE id_contrato = $1', [p_id_contrato]);
+    } else if (p_modalidad === 'FINAL') {
+        await pool.query('UPDATE contrato SET facturado_final = true WHERE id_contrato = $1', [p_id_contrato]);
+    }
+}
+
+// ==========================================
 // --- MIDDLEWARE DE AUTORIZACIÓN ---
 // ==========================================
 const verifyRole = (rolesPermitidos) => {
@@ -1303,6 +1351,12 @@ app.post('/api/facturas/calcular', verifyRole([1, 2]), async (req, res) => {
             return res.status(400).json({ error: "Para modalidad SEMANAL se requiere fecha_inicio" });
         }
         
+        // 🔥 VALIDACIÓN DE FACTURACIÓN PREVIA
+        const validacion = await validarFactura(id_contrato, modalidad, fecha_inicio, fecha_fin);
+        if (!validacion.valido) {
+            return res.status(400).json({ error: validacion.error });
+        }
+        
         const contratoResult = await pool.query(
             `SELECT c.id_cliente, c.num_spots_contratados, c.costo_unitario, 
                     c.spots_por_semana, c.fecha_inicio, c.fecha_fin,
@@ -1379,7 +1433,7 @@ app.post('/api/facturas-integral', verifyRole([1]), async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        const { id_cliente, folio_cfdi, fecha_emision, subtotal, iva, total, estado, detalles } = req.body;
+        const { id_cliente, folio_cfdi, fecha_emision, subtotal, iva, total, estado, detalles, modalidad } = req.body;
 
         const queryCliente = `
             SELECT c.razon_social, c.rfc_cliente, 
@@ -1423,6 +1477,7 @@ app.post('/api/facturas-integral', verifyRole([1]), async (req, res) => {
         
         await client.query(queryDocs, [idNuevaFactura, `/uploads/${nombrePDF}`, `/uploads/${nombreXML}`]);
 
+        let spotsFacturados = 0;
         if (detalles && Array.isArray(detalles)) {
             for (let d of detalles) {
                 const idContratoLimpio = d.id_contrato && d.id_contrato !== "" ? d.id_contrato : null;
@@ -1430,6 +1485,20 @@ app.post('/api/facturas-integral', verifyRole([1]), async (req, res) => {
                     `INSERT INTO facturas_detalle (id_factura, id_contrato, periodo_inicio, periodo_fin, monto_facturado) 
                      VALUES ($1, $2, $3, $4, $5)`,
                     [idNuevaFactura, idContratoLimpio, d.periodo_inicio, d.periodo_fin, d.monto_facturado]
+                );
+                
+                // Calcular spots facturados para el registro
+                const spotsCalc = (d.monto_facturado / (await pool.query('SELECT costo_unitario FROM contrato WHERE id_contrato = $1', [idContratoLimpio])).rows[0]?.costo_unitario) || 0;
+                spotsFacturados = Math.round(spotsCalc);
+                
+                // 🔥 REGISTRAR PERÍODO FACTURADO
+                await registrarPeriodoFacturado(
+                    idNuevaFactura, 
+                    idContratoLimpio, 
+                    d.periodo_inicio, 
+                    d.periodo_fin, 
+                    modalidad || 'PERIODO',
+                    spotsFacturados
                 );
             }
         }
