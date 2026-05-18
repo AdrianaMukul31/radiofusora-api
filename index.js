@@ -101,12 +101,16 @@ async function validarFactura(p_id_contrato, p_modalidad, p_fecha_inicio, p_fech
 }
 
 async function registrarPeriodoFacturado(p_id_factura, p_id_contrato, p_fecha_inicio, p_fecha_fin, p_modalidad, p_spots) {
-    await pool.query(
-        `INSERT INTO facturas_periodos (id_contrato, id_factura, periodo_inicio, periodo_fin, modalidad, spots_facturados)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [p_id_contrato, p_id_factura, p_fecha_inicio, p_fecha_fin, p_modalidad, p_spots]
-    );
+    // Solo insertar en facturas_periodos si tiene fechas de período (PERIODO o SEMANAL)
+    if ((p_modalidad === 'PERIODO' || p_modalidad === 'SEMANAL') && p_fecha_inicio && p_fecha_fin) {
+        await pool.query(
+            `INSERT INTO facturas_periodos (id_contrato, id_factura, periodo_inicio, periodo_fin, modalidad, spots_facturados)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [p_id_contrato, p_id_factura, p_fecha_inicio, p_fecha_fin, p_modalidad, p_spots]
+        );
+    }
     
+    // Marcar contrato como facturado si es COMPLETO o FINAL
     if (p_modalidad === 'COMPLETO') {
         await pool.query('UPDATE contrato SET facturado_completo = true WHERE id_contrato = $1', [p_id_contrato]);
     } else if (p_modalidad === 'FINAL') {
@@ -1488,10 +1492,11 @@ app.post('/api/facturas-integral', verifyRole([1]), async (req, res) => {
                 );
                 
                 // Calcular spots facturados para el registro
-                const spotsCalc = (d.monto_facturado / (await pool.query('SELECT costo_unitario FROM contrato WHERE id_contrato = $1', [idContratoLimpio])).rows[0]?.costo_unitario) || 0;
-                spotsFacturados = Math.round(spotsCalc);
+                const costoResult = await pool.query('SELECT costo_unitario FROM contrato WHERE id_contrato = $1', [idContratoLimpio]);
+                const costoUnitario = costoResult.rows[0]?.costo_unitario || 0;
+                spotsFacturados = costoUnitario > 0 ? Math.round(d.monto_facturado / costoUnitario) : 0;
                 
-                // 🔥 REGISTRAR PERÍODO FACTURADO
+                // 🔥 REGISTRAR PERÍODO FACTURADO (solo si tiene fechas)
                 await registrarPeriodoFacturado(
                     idNuevaFactura, 
                     idContratoLimpio, 
